@@ -32,9 +32,9 @@ game_loop(GameState) :-
         ;
             get_valid_move(Move)
         ),
-        (parse_move(Move, Symbol, Col, Row) ->
+        (parse_move(Move, Col, Row) ->
             (is_cell_empty(Player1Board, Row, Col) ->
-                move(GameState, [Symbol, Col, Row], NewGameState),
+                move(GameState, [Col, Row], NewGameState),
                 game_loop(NewGameState)
             ;   format('Invalid move or cell occupied. Try again.~n', []),
                 game_loop(GameState))
@@ -105,17 +105,17 @@ display_rows([Row|Board], [RowIndex|RowIndices]) :-
 
 % Makes a move
 move(game_state(CurrentPlayer, Player1Board, Player2Board, Players), 
-    [Symbol, Col, Row], 
+    [Col, Row], 
     game_state(NextPlayer, NewPlayer1Board, NewPlayer2Board, Players)) :-
+    type_move(CurrentPlayer, Symbol),
     place_symbol(Player1Board, Col, Row, Symbol, NewPlayer1Board),
     place_symbol(Player2Board, Col, Row, Symbol, NewPlayer2Board),
     next_player(CurrentPlayer, Players, NextPlayer).
 
-% filepath: /Users/lamas/Desktop/FEUP/3ºAno/1S/PFL/Prolog/PFL_TP2/src/game.pl
 place_symbol(board(RandomizedColumns, RandomizedRows, Board), Col, Row, Symbol, board(RandomizedColumns, RandomizedRows, NewBoard)) :-
     nth1(RowIndex, RandomizedRows, Row), % Get the actual row index
-    ColCode is Col + 96, % Convert column number to ASCII code
-    char_code(ColChar, ColCode), % Convert ASCII code to character
+    ColCode is Col + 96,
+    char_code(ColChar, ColCode),
     nth1(ColIndex, RandomizedColumns, ColChar), % Get the actual column index
     nth1(RowIndex, Board, CurrentRow), % Get the specific row from the board
     replace_in_list(CurrentRow, ColIndex, Symbol, NewRow),
@@ -146,30 +146,30 @@ member_contains(Board, Symbol) :-
 % Reads a valid move
 get_valid_move(Move) :-
     repeat,
-    format('Enter your move (e.g., xa1): ', []),
+    format('Enter your move (e.g., a1): ', []),
     read(Input),
     (process_input(Input, Move) ->
         ! % Valid move, exit loop
     ;   format('Invalid move format. Try again.~n', []), fail).
 
-process_input(Input, [Symbol, ColChar, RowChar]) :-
-    atom_chars(Input, [Symbol, ColChar, RowChar]),
-    valid_move_format([Symbol, ColChar, RowChar]).
+process_input(Input, [ColChar, RowChar]) :-
+    atom_chars(Input, [ColChar, RowChar]),
+    valid_move_format([ColChar, RowChar]).
 
-valid_move_format([Symbol, ColChar, RowChar]) :-
-    member(Symbol, ['x', 'o']),
+valid_move_format([ColChar, RowChar]) :-
     char_code(ColChar, ColCode),
     ColCode >= 97, ColCode =< 104,
     char_code(RowChar, RowCode),
     RowCode >= 49, RowCode =< 56.
 
-parse_move([Symbol, ColChar, RowChar], Symbol, Col, Row) :-
+parse_move([ColChar, RowChar], Col, Row) :-
     char_code(RowChar, RowCode),
     Row is RowCode - 48,
     char_code(ColChar, ColCode),
     ColCode >= 97, ColCode =< 104,
     Col is ColCode - 96.
 
+% Checks if a specific cell is empty
 is_cell_empty(board(RandomizedColumns, RandomizedRows, Board), Row, Col) :-
     nth1(RowIndex, RandomizedRows, Row), % Get the actual row index
     ColCode is Col + 96, % Convert column number to ASCII code
@@ -178,3 +178,7 @@ is_cell_empty(board(RandomizedColumns, RandomizedRows, Board), Row, Col) :-
     nth1(RowIndex, Board, BoardRow), % Get the specific row from the board
     nth1(ColIndex, BoardRow, Cell), % Get the specific column from the row
     Cell = '-'.
+
+% Stores the move type for each player
+type_move(player1, 'x').
+type_move(player2, 'o').
