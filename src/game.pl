@@ -16,32 +16,87 @@ play :-
 
 % Configure the game based on the selected mode
 configure_game(1, game_config(human, human)).
-configure_game(2, game_config(human, pc)).
-configure_game(3, game_config(pc, human)).
-configure_game(4, game_config(pc, pc)).
+configure_game(2, GameConfig) :-
+    format('Select the level of PC player2:~n', []),
+    format('1. Level 1~n', []),
+    format('2. Level 2~n', []),
+    read(Level),
+    GameConfig = game_config(human, pc(Level)).
+configure_game(3, GameConfig) :-
+    format('Select the level of PC player1:~n', []),
+    format('1. Level 1~n', []),
+    format('2. Level 2~n', []),
+    read(Level),
+    GameConfig = game_config(pc(Level), human).
+configure_game(4, GameConfig) :-
+    format('Select the level of PC player1:~n', []),
+    format('1. Level 1~n', []),
+    format('2. Level 2~n', []),
+    read(Level1),
+    format('Select the level of PC player2:~n', []),
+    format('1. Level 1~n', []),
+    format('2. Level 2~n', []),
+    read(Level2),
+    GameConfig = game_config(pc(Level1), pc(Level2)).
 
 game_loop(GameState):-
     game_over(GameState, Winner),
     display_winner(Winner).
-
-% Main game loop
+    
 game_loop(GameState) :-
     display_game(GameState),
     GameState = game_state(CurrentPlayer, Player1Board, Player2Board, Players),
-    (CurrentPlayer == pc ->
-        choose_move(GameState, Move)
+    current_player_type(CurrentPlayer, Players, PlayerType),
+    format('Current Player Type: ~w~n', [PlayerType]),
+
+    % Handle player moves based on type
+    (PlayerType == pc(1) ->
+        format('PC is making a move...~n', []),
+        choose_move(GameState, 1, Move),
+        format('PC chooses move: ~w~n', [Move]),
+        Move = [Symbol, Col, Row] % Extract the move details directly for PC
     ;
-        get_valid_move(Move)
+    PlayerType == pc(2) ->
+        format('PC is making a move...~n', []),
+        choose_move(GameState, 2, Move),
+        format('PC chooses move: ~w~n', [Move]),
+        Move = [Symbol, Col, Row] % Extract the move details directly for PC
+    ;
+    PlayerType == human ->
+        format('Human is making a move...~n', []),
+        get_valid_move(Move),
+        format('Human chooses move: ~w~n', [Move]),
+        (parse_move(Move, Symbol, Col, Row) ->
+            true
+        ;
+            format('Invalid move format. Try again.~n', []),
+            game_loop(GameState),
+            fail
+        )
     ),
-    (parse_move(Move, Symbol, Col, Row) ->
-        (is_cell_empty(Player1Board, Row, Col) ->
-            move(GameState, [Symbol, Col, Row], NewGameState),
-            game_loop(NewGameState)
-        ;   format('Invalid move or cell occupied. Try again.~n', []),
-            game_loop(GameState))
-    ;   
-        format('Invalid move format. Try again.~n', []),
-        game_loop(GameState)).
+
+    % Common logic for processing the move
+    (is_cell_empty(Player1Board, Row, Col) ->
+        move(GameState, [Symbol, Col, Row], NewGameState),
+        game_loop(NewGameState)
+    ;
+        format('Invalid move or cell occupied. Try again.~n', []),
+        game_loop(GameState)
+    ).
+
+
+
+% Determine the type of the current player (human or pc)
+current_player_type(player1, [Player1, _], PlayerType) :-
+    Player1 = PlayerType.
+current_player_type(player2, [_, Player2], PlayerType) :-
+    Player2 = PlayerType.
+
+
+
+
+
+
 
 % Initializes the game state
 initial_state(game_config(Player1, Player2), 
@@ -104,18 +159,21 @@ display_rows([Row|Board], [RowIndex|RowIndices]) :-
 move(game_state(CurrentPlayer, Player1Board, Player2Board, Players), 
     [Symbol, Col, Row], 
     game_state(NextPlayer, NewPlayer1Board, NewPlayer2Board, Players)) :-
+        format('Debug: Col=~w, Row=~w~n', [Col, Row]),
     place_symbol(Player1Board, Col, Row, Symbol, NewPlayer1Board),
     place_symbol(Player2Board, Col, Row, Symbol, NewPlayer2Board),
     next_player(CurrentPlayer, Players, NextPlayer).
 
 place_symbol(board(RandomizedColumns, RandomizedRows, Board), Col, Row, Symbol, board(RandomizedColumns, RandomizedRows, NewBoard)) :-
     nth1(RowIndex, RandomizedRows, Row), % Get the actual row index
-    ColCode is Col + 96,
-    char_code(ColChar, ColCode),
+    ColCode is Col + 96,                % Convert column to its character code (1 -> 97, 'a')
+    char_code(ColChar, ColCode),         % Convert the column code to the character (e.g., 1 -> 'a')
     nth1(ColIndex, RandomizedColumns, ColChar), % Get the actual column index
-    nth1(RowIndex, Board, CurrentRow), % Get the specific row from the board
-    replace_in_list(CurrentRow, ColIndex, Symbol, NewRow),
-    replace_in_list(Board, RowIndex, NewRow, NewBoard).
+    nth1(RowIndex, Board, CurrentRow),  % Get the specific row from the board
+    replace_in_list(CurrentRow, ColIndex, Symbol, NewRow), % Update the row
+    replace_in_list(Board, RowIndex, NewRow, NewBoard). % Update the board
+
+
 
 replace_in_list([_|T], 1, X, [X|T]).
 replace_in_list([H|T], I, X, [H|R]) :-
@@ -182,6 +240,10 @@ parse_move([Symbol, ColChar, RowChar], Symbol, Col, Row) :-
     char_code(ColChar, ColCode),
     ColCode >= 97, ColCode =< 104,
     Col is ColCode - 96.
+
+is_valid_move(game_state(_, Player1Board, Player2Board, _), Col, Row) :-
+    is_cell_empty(Player1Board, Row, Col);
+    is_cell_empty(Player2Board, Row, Col).
 
 is_cell_empty(board(RandomizedColumns, RandomizedRows, Board), Row, Col) :-
     nth1(RowIndex, RandomizedRows, Row), % Get the actual row index
@@ -285,3 +347,54 @@ square_match(Board, Symbol) :-
     nth1(Col, RowList2, Symbol),
     nth1(NextCol, RowList1, Symbol),
     nth1(NextCol, RowList2, Symbol).
+
+
+
+
+
+
+choose_move(GameState, 1, Move) :-
+    valid_moves(GameState, ValidMoves),
+    format('PC Level 1 valid moves: ~w~n', [ValidMoves]),
+    (ValidMoves = [] ->
+            Move = none  % Indicate no move is possible
+        ;
+            random_member(Move, ValidMoves)
+        ).
+
+choose_move(GameState, 2, Move) :-
+    valid_moves(GameState, ValidMoves),
+    % implement the logic for the PC level 2
+    random_member(Move, ValidMoves).
+
+
+% Make sure the column is converted to a numeric value (1-8)
+valid_move(PlayerBoard, Symbol, Col, Row) :-
+    between(1, 8, Col), % Ensure Col is within the valid range
+    between(1, 8, Row), % Ensure Row is within the valid range
+    is_cell_empty(PlayerBoard, Row, Col),
+    member(Symbol, ['x', 'o']). % Ensure Symbol is valid
+
+
+% Get the list of all valid moves for a given game state
+valid_moves(GameState, ListOfMoves) :-
+    GameState = game_state(_, Player1Board, _, _),
+    findall([Symbol, Col, Row], (
+        member(Symbol, ['x', 'o']),
+        valid_move(Player1Board, Symbol, Col, Row)
+    ), ListOfMoves),
+    format('Valid moves: ~w~n', [ListOfMoves]).
+
+
+
+between(Low, High, Value) :-
+    Low =< High,
+    between_helper(Low, High, Value).
+
+% Helper predicate for generating values.
+between_helper(Current, High, Current) :-
+    Current =< High.
+between_helper(Current, High, Value) :-
+    Current < High,
+    Next is Current + 1,
+    between_helper(Next, High, Value).
