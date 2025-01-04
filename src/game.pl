@@ -16,28 +16,20 @@ play :-
 
 % Configure the game based on the selected mode
 configure_game(1, game_config(human, human)).
-configure_game(2, GameConfig) :-
-    format('Select the level of PC player2:~n', []),
+configure_game(2, game_config(human, pc(Level))) :-
+    select_pc_level('1', Level).
+configure_game(3, game_config(pc(Level), human)) :-
+    select_pc_level('2', Level).
+configure_game(4, game_config(pc(Level1), pc(Level2))) :-
+    select_pc_level('1', Level1),
+    select_pc_level('2', Level2).
+
+% Select the level of the PC player
+select_pc_level(Player, Level) :-
+    format('~nSelect the level of PC player ~w:~n', [Player]),
     format('1. Level 1~n', []),
     format('2. Level 2~n', []),
-    read(Level),
-    GameConfig = game_config(human, pc(Level)).
-configure_game(3, GameConfig) :-
-    format('Select the level of PC player1:~n', []),
-    format('1. Level 1~n', []),
-    format('2. Level 2~n', []),
-    read(Level),
-    GameConfig = game_config(pc(Level), human).
-configure_game(4, GameConfig) :-
-    format('Select the level of PC player1:~n', []),
-    format('1. Level 1~n', []),
-    format('2. Level 2~n', []),
-    read(Level1),
-    format('Select the level of PC player2:~n', []),
-    format('1. Level 1~n', []),
-    format('2. Level 2~n', []),
-    read(Level2),
-    GameConfig = game_config(pc(Level1), pc(Level2)).
+    read(Level).
 
 % Determine the type of the current player (human or pc)
 current_player_type(player1, [Player1, _], Player1).
@@ -47,8 +39,8 @@ current_player_type(player2, [_, Player2], Player2).
 player_info(game_state(CurrentPlayer, _, _, Players), CurrentPlayer, Players).
 
 % Determines the next player
-next_player(player1, [_, Player2], player2).
-next_player(player2, [Player1, _], player1).
+next_player(player1, _, player2).
+next_player(player2, _, player1).
 
 set_next_player(game_state(CurrentPlayer, Player1Board, Player2Board, Players), 
     game_state(NextPlayer, Player1Board, Player2Board, Players)) :-
@@ -116,16 +108,21 @@ turn(human, GameState, NewGameState) :-
     format('Human\'s turn~n', []),
     choose_move(GameState, 0, move('x', Col, Row)),
     format('Played move: ~w~n', [move('x', Col, Row)]),
-    move(GameState, ['x', Col, Row], TempGameState),
-    format('After move: ~w~n', [move('x', Col, Row)]),
-    choose_move(TempGameState, 0, move('o', Col2, Row2)),
+    move(GameState, ['x', Col, Row], FirstMoveState),
+    choose_move(FirstMoveState, 0, move('o', Col2, Row2)),
     format('Played move: ~w~n', [move('o', Col2, Row2)]),
-    move(TempGameState, ['o', Col2, Row2], TempGameState2),
-    format('After move: ~w~n', [move('o', Col2, Row2)]),
-    set_next_player(TempGameState2, NewGameState).
+    move(FirstMoveState, ['o', Col2, Row2], SecondMoveState),
+    set_next_player(SecondMoveState, NewGameState).
 
 turn(pc(1), GameState, NewGameState) :-
-    handle_pc_move(GameState, 1, NewGameState).
+    format('PC Level 1 is making moves...~n', []),
+    choose_move(GameState, 1, move('x', Col, Row)),
+    format('Played move: ~w~n', [move('x', Col, Row)]),
+    move(GameState, ['x', Col, Row], FirstMoveState),
+    choose_move(FirstMoveState, 1, move('o', Col2, Row2)),
+    format('Played move: ~w~n', [move('o', Col2, Row2)]),
+    move(FirstMoveState, ['o', Col2, Row2], SecondMoveState),
+    set_next_player(SecondMoveState, NewGameState).
 
 turn(pc(2), GameState, NewGameState) :-
     handle_pc_move(GameState, 2, NewGameState).
@@ -204,33 +201,22 @@ choose_move(GameState, 0, move('o', Col, Row)):-
     format('Invalid move format or cell already occupied. Try again.~n', []),
     choose_move(GameState, 0, move('o', Col, Row)).
 
+choose_move(GameState, 1, move('x', Col, Row)):-
+    valid_moves(GameState, ValidMoves),
+    include(valid_x_move, ValidMoves, XMoves),
+    random_member([_, Col, Row], XMoves).
+
+choose_move(GameState, 1, move('o', Col, Row)) :-
+    valid_moves(GameState, ValidMoves),
+    include(valid_o_move, ValidMoves, OMoves),
+    random_member([_, Col, Row], OMoves).
+
 choose_move(GameState, 2, Move) :-
     valid_moves(GameState, ValidMoves),
     % implement the logic for the PC level 2
     random_member(Move, ValidMoves).
 
-choose_move_x(GameState, 1, Move) :-
-    valid_moves(GameState, ValidMoves),
-    % Filter valid moves to include only those starting with "x"
-    include(valid_x_move, ValidMoves, XMoves),
-    (   XMoves = [] 
-    ->  Move = none  % Indicate no move is possible
-    ;   random_member(Move, XMoves)
-    ).
-
-% Predicate to check if the move starts with "x"
 valid_x_move([x, _, _]).
-
-choose_move_o(GameState, 1, Move) :-
-    valid_moves(GameState, ValidMoves),
-    % Filter valid moves to include only those starting with "o"
-    include(valid_o_move, ValidMoves, OMoves),
-    (   OMoves = [] 
-    ->  Move = none  % Indicate no move is possible
-    ;   random_member(Move, OMoves)
-    ).
-
-% Predicate to check if the move starts with "o"
 valid_o_move([o, _, _]).
 
 % Make sure the column is converted to a numeric value (1-8)
