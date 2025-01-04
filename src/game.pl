@@ -103,29 +103,40 @@ display_rows([Row|Board], [RowIndex|RowIndices]) :-
     write_list(Row), nl,
     display_rows(Board, RowIndices).
 
+% Separates the game state
+parse_gamestate(game_state(CurrentPlayer, Player1Board, Player2Board, Players), 
+    CurrentPlayer, Player1Board, Player2Board, Players).
+
 % Handles the turn of a player
 turn(human, GameState, NewGameState) :-
     format('Human\'s turn~n', []),
     choose_move(GameState, 0, move('x', Col, Row)),
-    format('Played move: ~w~n', [move('x', Col, Row)]),
+    format('Played move: ~w~n', [['x', Col, Row]]),
     move(GameState, ['x', Col, Row], FirstMoveState),
     choose_move(FirstMoveState, 0, move('o', Col2, Row2)),
-    format('Played move: ~w~n', [move('o', Col2, Row2)]),
+    format('Played move: ~w~n', [['o', Col2, Row2]]),
     move(FirstMoveState, ['o', Col2, Row2], SecondMoveState),
     set_next_player(SecondMoveState, NewGameState).
 
 turn(pc(1), GameState, NewGameState) :-
     format('PC Level 1 is making moves...~n', []),
     choose_move(GameState, 1, move('x', Col, Row)),
-    format('Played move: ~w~n', [move('x', Col, Row)]),
+    format('Played move: ~w~n', [['x', Col, Row]]),
     move(GameState, ['x', Col, Row], FirstMoveState),
     choose_move(FirstMoveState, 1, move('o', Col2, Row2)),
-    format('Played move: ~w~n', [move('o', Col2, Row2)]),
+    format('Played move: ~w~n', [['o', Col2, Row2]]),
     move(FirstMoveState, ['o', Col2, Row2], SecondMoveState),
     set_next_player(SecondMoveState, NewGameState).
 
 turn(pc(2), GameState, NewGameState) :-
-    handle_pc_move(GameState, 2, NewGameState).
+    format('PC Level 2 is thinking...~n', []),
+    choose_move(GameState, 2, move('x', Col, Row)),
+    format('Played move: ~w~n', [['x', Col, Row]]),
+    move(GameState, ['x', Col, Row], FirstMoveState),
+    choose_move(FirstMoveState, 2, move('o', Col2, Row2)),
+    format('Played move: ~w~n', [['o', Col2, Row2]]),
+    move(FirstMoveState, ['o', Col2, Row2], SecondMoveState),
+    set_next_player(SecondMoveState, NewGameState).
 
 game_loop(GameState):-
     game_over(GameState, Winner),
@@ -140,21 +151,6 @@ game_loop(GameState) :-
 
     % Proceed to the next iteration of the loop
     game_loop(NewGameState).
-
-
-
-% Handles moves for PC players
-handle_pc_move(GameState, Level, NewGameState) :-
-    format('PC Level ~w is making moves...~n', [Level]),
-    choose_move_x(GameState, Level, MoveX),
-    format('PC chooses "x" move: ~w~n', [MoveX]),
-    move(GameState, MoveX, TempGameState),
-    choose_move_o(TempGameState, Level, MoveO),
-    format('PC chooses "o" move: ~w~n', [MoveO]),
-    move(TempGameState, MoveO, TempGameStateAfterO),
-    TempGameStateAfterO = game_state(CurrentPlayer, Player1Board, Player2Board, Players),
-    next_player(CurrentPlayer, Players, NextPlayer),
-    NewGameState = game_state(NextPlayer, Player1Board, Player2Board, Players).
 
 % Makes a move
 move(game_state(CurrentPlayer, Player1Board, Player2Board, Players), 
@@ -211,10 +207,54 @@ choose_move(GameState, 1, move('o', Col, Row)) :-
     include(valid_o_move, ValidMoves, OMoves),
     random_member([_, Col, Row], OMoves).
 
-choose_move(GameState, 2, Move) :-
+choose_move(GameState, 2, move('x', Col, Row)) :-
     valid_moves(GameState, ValidMoves),
-    % implement the logic for the PC level 2
-    random_member(Move, ValidMoves).
+    include(valid_x_move, ValidMoves, XMoves),
+    find_best_move(GameState, XMoves, [_, Col, Row]).
+
+choose_move(GameState, 2, move('o', Col, Row)) :-
+    valid_moves(GameState, ValidMoves),
+    include(valid_o_move, ValidMoves, OMoves),
+    find_best_move(GameState, OMoves, [_, Col, Row]).
+
+value(game_state(player1, board(_, _, Board), _, _), _, Player1Score) :-
+    score(Player1Score, Board, _, _).
+
+value(game_state(player2, _, board(_, _, Board), _), _, Player2Score) :-
+    score(Player2Score, Board, _, _).
+
+find_best_move(GameState, ValidMoves, BestMove) :-
+    parse_gamestate(GameState, CurrentPlayer, _, _, _),
+    findall(Diff-Move, (
+        member(Move, ValidMoves),
+        simulate_move(GameState, Move, SimulatedState),
+        valid_moves(SimulatedState, OpponentMoves),
+        calculate_max_opponent_value(SimulatedState, OpponentMoves, MaxOpponentValue),
+        value(SimulatedState, CurrentPlayer, CurrentValue),
+        compute_diff(CurrentValue, MaxOpponentValue, OpponentMoves, Diff)
+    ), ValuedMoves),
+    sort(ValuedMoves, SortedValuedMoves),
+    keysort(SortedValuedMoves, [_-BestMove|_]).
+
+calculate_max_opponent_value(_, [], 0). % Fallback value if OpponentMoves is empty
+calculate_max_opponent_value(SimulatedState, OpponentMoves, MaxOpponentValue) :-
+    findall(OpponentValue, (
+        member(OpponentMove, OpponentMoves),
+        simulate_move(SimulatedState, OpponentMove, OpponentGameState),
+        value(OpponentGameState, _, OpponentValue)
+    ), OpponentValues),
+    max_list(OpponentValues, MaxOpponentValue).
+
+compute_diff(CurrentValue, _, [], CurrentValue). % Fallback when no opponent moves
+compute_diff(CurrentValue, MaxOpponentValue, [_|_], Diff) :- 
+    Diff is MaxOpponentValue - CurrentValue. % Normal case
+
+% Simulate a move on the game state
+simulate_move(game_state(player1, Board, _, Players), [Symbol, Col, Row], game_state(_, NewBoard, NewBoard, Players)) :-
+    place_symbol(Board, Col, Row, Symbol, NewBoard).
+
+simulate_move(game_state(player2, _, Board, Players), [Symbol, Col, Row], game_state(_, NewBoard, NewBoard, Players)) :-
+    place_symbol(Board, Col, Row, Symbol, NewBoard).
 
 valid_x_move([x, _, _]).
 valid_o_move([o, _, _]).
@@ -229,7 +269,7 @@ valid_move(PlayerBoard, Symbol, Col, Row) :-
 
 % Get the list of all valid moves for a given game state
 valid_moves(GameState, ListOfMoves) :-
-    GameState = game_state(_, Player1Board, _, _),
+    parse_gamestate(GameState, _, Player1Board, _, _),
     findall([Symbol, Col, Row], (
         member(Symbol, ['x', 'o']),
         valid_move(Player1Board, Symbol, Col, Row)
@@ -244,10 +284,7 @@ get_valid_move([MoveX, MoveO]) :-
     process_input_x(InputX, MoveX),
     format('Enter your "o" move (e.g., a1): ', []),
     read(InputO),
-    process_input_o(InputO, MoveO),
-
-
-    !.  % Exit loop if both inputs are valid
+    process_input_o(InputO, MoveO).
 
 % Auxiliar predicate to handle invalid input
 get_valid_move(Moves) :-
@@ -304,8 +341,10 @@ is_cell_empty(board(RandomizedColumns, RandomizedRows, Board), Row, Col) :-
 game_over(game_state(_, board(_, _, Board1), board(_, _, Board2), _), Winner) :-
     \+ (member_contains(Board1, '-')),
     \+ (member_contains(Board2, '-')),
-    score(Score1, Board1),
-    score(Score2, Board2),
+    score(Score1, Board1, _, _),
+    score(Score2, Board2, _, _),
+    format('Player 1 Score: ~w~n', [Score1]),
+    format('Player 2 Score: ~w~n', [Score2]),
     determine_winner(Score1, Score2, Winner).
 
 % Determines the winner based on the scores
@@ -334,7 +373,7 @@ sublist(Sub, List) :-
     append(Sub, _, Rest).
 
 % Calculates the total score of a board
-score(Total, Board) :-
+score(Total, Board, (XScore, HX, VX, DX, SX), (OScore, HO, VO, DO, SO)) :-
     count_lines(Board, x, HX),
     count_vertical_lines(Board, x, VX),
     count_diagonal_lines(Board, x, DX),
