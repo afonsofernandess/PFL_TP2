@@ -99,9 +99,6 @@ process_move(GameState, Move, NewGameState) :-
 
 
 
-
-
-
 % Determine the type of the current player (human or pc)
 current_player_type(player1, [Player1, _], PlayerType) :-
     Player1 = PlayerType.
