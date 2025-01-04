@@ -42,47 +42,63 @@ configure_game(4, GameConfig) :-
 game_loop(GameState):-
     game_over(GameState, Winner),
     display_winner(Winner).
-    
+
 game_loop(GameState) :-
     display_game(GameState),
     GameState = game_state(CurrentPlayer, Player1Board, Player2Board, Players),
     current_player_type(CurrentPlayer, Players, PlayerType),
     format('Current Player Type: ~w~n', [PlayerType]),
 
-    % Handle player moves based on type
+    % Handle player moves
     (PlayerType == pc(1) ->
-        format('PC is making a move...~n', []),
-        choose_move(GameState, 1, Move),
-        format('PC chooses move: ~w~n', [Move]),
-        Move = [Symbol, Col, Row] % Extract the move details directly for PC
-    ;
+        handle_pc_move(GameState, 1, NewGameState);
     PlayerType == pc(2) ->
-        format('PC is making a move...~n', []),
-        choose_move(GameState, 2, Move),
-        format('PC chooses move: ~w~n', [Move]),
-        Move = [Symbol, Col, Row] % Extract the move details directly for PC
-    ;
+        handle_pc_move(GameState, 2, NewGameState);
     PlayerType == human ->
-        format('Human is making a move...~n', []),
-        get_valid_move(Move),
-        format('Human chooses move: ~w~n', [Move]),
-        (parse_move(Move, Symbol, Col, Row) ->
-            true
-        ;
-            format('Invalid move format. Try again.~n', []),
-            game_loop(GameState),
-            fail
-        )
-    ),
+        handle_human_move(GameState, NewGameState)),
 
-    % Common logic for processing the move
+    % Proceed to the next iteration of the loop
+    game_loop(NewGameState).
+
+% Handles moves for PC players
+handle_pc_move(GameState, Level, NewGameState) :-
+    format('PC Level ~w is making moves...~n', [Level]),
+    choose_move_x(GameState, Level, MoveX),
+    format('PC chooses "x" move: ~w~n', [MoveX]),
+    process_move(GameState, MoveX, TempGameState),
+    choose_move_o(TempGameState, Level, MoveO),
+    format('PC chooses "o" move: ~w~n', [MoveO]),
+    process_move(TempGameState, MoveO, TempGameStateAfterO),
+    TempGameStateAfterO = game_state(CurrentPlayer, Player1Board, Player2Board, Players),
+    next_player(CurrentPlayer, Players, NextPlayer),
+    NewGameState = game_state(NextPlayer, Player1Board, Player2Board, Players).
+
+
+% Handles moves for human players
+handle_human_move(GameState, NewGameState) :-
+    format('Human is making two moves...~n', []),
+    get_valid_move([MoveX, MoveO]), % Changed from `get_valid_move` to reflect plural intent
+    format('Human chooses moves: "x" -> ~w, "o" -> ~w~n', [MoveX, MoveO]),
+
+    process_move(GameState, MoveX, TempGameState),
+    process_move(TempGameState, MoveO, NGameState),
+    NGameState = game_state(CurrentPlayer, Player1Board, Player2Board, Players),
+    next_player(CurrentPlayer, Players, NextPlayer),
+    NewGameState = game_state(NextPlayer, Player1Board, Player2Board, Players).
+
+% Processes a single move
+process_move(GameState, Move, NewGameState) :-
+    Move = [Symbol, Col, Row],
+    GameState = game_state(CurrentPlayer, Player1Board, Player2Board, Players),
     (is_cell_empty(Player1Board, Row, Col) ->
-        move(GameState, [Symbol, Col, Row], NewGameState),
-        game_loop(NewGameState)
+        move(GameState, Move, NewGameState)
     ;
         format('Invalid move or cell occupied. Try again.~n', []),
-        game_loop(GameState)
+        NewGameState = GameState % Maintain state if move is invalid
     ).
+
+
+
 
 
 
@@ -158,11 +174,9 @@ display_rows([Row|Board], [RowIndex|RowIndices]) :-
 % Makes a move
 move(game_state(CurrentPlayer, Player1Board, Player2Board, Players), 
     [Symbol, Col, Row], 
-    game_state(NextPlayer, NewPlayer1Board, NewPlayer2Board, Players)) :-
-        format('Debug: Col=~w, Row=~w~n', [Col, Row]),
+    game_state(CurrentPlayer, NewPlayer1Board, NewPlayer2Board, Players)) :-
     place_symbol(Player1Board, Col, Row, Symbol, NewPlayer1Board),
-    place_symbol(Player2Board, Col, Row, Symbol, NewPlayer2Board),
-    next_player(CurrentPlayer, Players, NextPlayer).
+    place_symbol(Player2Board, Col, Row, Symbol, NewPlayer2Board).
 
 place_symbol(board(RandomizedColumns, RandomizedRows, Board), Col, Row, Symbol, board(RandomizedColumns, RandomizedRows, NewBoard)) :-
     nth1(RowIndex, RandomizedRows, Row), % Get the actual row index
@@ -212,41 +226,70 @@ member_contains(Board, Symbol) :-
     member(Symbol, Row).
 
 % Reads a valid move
-get_valid_move(Move) :-
-    format('Enter your move (e.g., xa1): ', []),
-    read(Input),
-    process_input(Input, Move),
-    !.  % Exit loop
+% Reads two valid moves for the round
+get_valid_move([MoveX, MoveO]) :-
+    format('Enter your "x" move (e.g., b3): ', []),
+    read(InputX),
+    process_input_x(InputX, MoveX),
+    format('Enter your "o" move (e.g., a1): ', []),
+    read(InputO),
+    process_input_o(InputO, MoveO),
+
+
+    !.  % Exit loop if both inputs are valid
 
 % Auxiliar predicate to handle invalid input
-get_valid_move(Move) :-
-    format('Invalid move format. Try again.~n', []),
-    get_valid_move(Move).  % Retry the input loop
+get_valid_move(Moves) :-
+    format('Invalid move format or coordinates already have a symbol. Try again.~n', []),
+    get_valid_move(Moves).  % Retry the input loop
 
-process_input(Input, [Symbol, ColChar, RowChar]) :-
-    atom_chars(Input, [Symbol, ColChar, RowChar]),
-    valid_move_format([Symbol, ColChar, RowChar]).
-
-valid_move_format([Symbol, ColChar, RowChar]) :-
-    member(Symbol, ['x', 'o']),
-    char_code(ColChar, ColCode),
-    ColCode >= 97, ColCode =< 104,
+% Processes a single move input
+process_input_x(Input, [Symbol, Col, Row]) :-
+    atom_chars(Input, [ColChar, RowChar]),
+    valid_move_format(['x', ColChar, RowChar]), % Assume "x" and "o" moves are fixed
+    Symbol = 'x',
     char_code(RowChar, RowCode),
-    RowCode >= 49, RowCode =< 56.
+    Row is RowCode - 48, % Convert char '1' to integer 1
+    char_code(ColChar, ColCode),
+    Col is ColCode - 96. % Convert char 'a' to integer 1
 
-parse_move([Symbol, ColChar, RowChar], Symbol, Col, Row) :-
+process_input_o(Input, [Symbol, Col, Row]) :-
+
+    atom_chars(Input, [ColChar, RowChar]),
+    valid_move_format(['o', ColChar, RowChar]),
+    Symbol = 'o',
     char_code(RowChar, RowCode),
     Row is RowCode - 48,
     char_code(ColChar, ColCode),
-    ColCode >= 97, ColCode =< 104,
     Col is ColCode - 96.
 
-is_valid_move(game_state(_, Player1Board, Player2Board, _), Col, Row) :-
-    is_cell_empty(Player1Board, Row, Col);
-    is_cell_empty(Player2Board, Row, Col).
+
+% Validates the format of a move
+valid_move_format([Symbol, ColChar, RowChar]) :-
+    member(Symbol, ['x', 'o']),
+    char_code(ColChar, ColCode),
+    ColCode >= 97, ColCode =< 104,  
+    char_code(RowChar, RowCode),
+    RowCode >= 49, RowCode =< 56.   
+
+
+parse_move(Input, Symbol, Col, Row) :-
+    atom(Input), % Ensure Input is an atom
+    atom_chars(Input, [ColChar, RowChar]),
+    member(Symbol, ['x', 'o']), % Symbol must be valid
+    char_code(ColChar, ColCode),
+    ColCode >= 97, ColCode =< 104, % Ensure column is 'a' to 'h'
+    Col is ColCode - 96, % Convert 'a'-'h' to 1-8
+    char_code(RowChar, RowCode),
+    RowCode >= 49, RowCode =< 56, % Ensure row is '1' to '8'
+    Row is RowCode - 48. % Convert '1'-'8' to 1-8
+
+
+
 
 is_cell_empty(board(RandomizedColumns, RandomizedRows, Board), Row, Col) :-
     nth1(RowIndex, RandomizedRows, Row), % Get the actual row index
+
     ColCode is Col + 96,
     char_code(ColChar, ColCode),
     nth1(ColIndex, RandomizedColumns, ColChar), % Get the actual column index
@@ -353,14 +396,30 @@ square_match(Board, Symbol) :-
 
 
 
-choose_move(GameState, 1, Move) :-
+choose_move_x(GameState, 1, Move) :-
     valid_moves(GameState, ValidMoves),
-    format('PC Level 1 valid moves: ~w~n', [ValidMoves]),
-    (ValidMoves = [] ->
-            Move = none  % Indicate no move is possible
-        ;
-            random_member(Move, ValidMoves)
-        ).
+    % Filter valid moves to include only those starting with "x"
+    include(valid_x_move, ValidMoves, XMoves),
+    (   XMoves = [] 
+    ->  Move = none  % Indicate no move is possible
+    ;   random_member(Move, XMoves)
+    ).
+
+% Predicate to check if the move starts with "o"
+valid_x_move([X, _, _]).
+
+choose_move_o(GameState, 1, Move) :-
+    valid_moves(GameState, ValidMoves),
+    % Filter valid moves to include only those starting with "o"
+    include(valid_o_move, ValidMoves, OMoves),
+    (   OMoves = [] 
+    ->  Move = none  % Indicate no move is possible
+    ;   random_member(Move, OMoves)
+    ).
+
+% Predicate to check if the move starts with "o"
+valid_o_move([o, _, _]).
+
 
 choose_move(GameState, 2, Move) :-
     valid_moves(GameState, ValidMoves),
@@ -382,8 +441,7 @@ valid_moves(GameState, ListOfMoves) :-
     findall([Symbol, Col, Row], (
         member(Symbol, ['x', 'o']),
         valid_move(Player1Board, Symbol, Col, Row)
-    ), ListOfMoves),
-    format('Valid moves: ~w~n', [ListOfMoves]).
+    ), ListOfMoves).
 
 
 
