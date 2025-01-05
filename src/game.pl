@@ -82,11 +82,11 @@ create_board(RandomizedColumns, RandomizedRows, EmptyBoard, board(RandomizedColu
 
 % Displays the current players board
 display_game(game_state(player1, Player1Board, _, _)) :-
-    format('Player 1\'s Turn~n', []),
+    format('Player 1\'s Turn~n~n', []),
     display_board(Player1Board).
 
 display_game(game_state(player2, _, Player2Board, _)) :-
-    format('Player 2\'s Turn~n', []),
+    format('Player 2\'s Turn~n~n', []),
     display_board(Player2Board).
 
 % Displays a single board
@@ -103,38 +103,60 @@ display_rows([Row|Board], [RowIndex|RowIndices]) :-
     write_list(Row), nl,
     display_rows(Board, RowIndices).
 
+% Displays 2 boards beside each other (used for game over)
+display_boards_side(board(Headers1, Rows1, Board1), board(Headers2, Rows2, Board2)):-
+    format('~n      Player 1              Player 2~n'), nl,
+    format('  ', []), write_list(Headers1),
+    format('      ', []), write_list(Headers2), nl,
+    display_rows_side(Board1, Rows1, Board2, Rows2).
+
+display_rows_side([], [], [], []):- nl.
+display_rows_side([Row1|Board1], [RowIndex1|RowIndices1], [Row2|Board2], [RowIndex2|RowIndices2]) :-
+    format('~w ', [RowIndex1]),
+    write_list(Row1),
+    format('    ~w ', [RowIndex2]),
+    write_list(Row2), nl,
+    display_rows_side(Board1, RowIndices1, Board2, RowIndices2).
+
 % Separates the game state
 parse_gamestate(game_state(CurrentPlayer, Player1Board, Player2Board, Players), 
     CurrentPlayer, Player1Board, Player2Board, Players).
+
+% Displays the played move in a more readable formmat
+display_move([Symbol, Col, Row]) :-
+    ColCode is Col + 96,
+    char_code(ColChar, ColCode),
+    atomic_list_concat([ColChar, Row], '', Cell),
+    format('Played ~w on ~w.~n', [Symbol, Cell]).
 
 % Handles the turn of a player
 turn(human, GameState, NewGameState) :-
     format('Human\'s turn~n', []),
     choose_move(GameState, 0, move('x', Col, Row)),
-    format('Played move: ~w~n', [['x', Col, Row]]),
     move(GameState, ['x', Col, Row], FirstMoveState),
     choose_move(FirstMoveState, 0, move('o', Col2, Row2)),
-    format('Played move: ~w~n', [['o', Col2, Row2]]),
     move(FirstMoveState, ['o', Col2, Row2], SecondMoveState),
+    display_move(['x', Col, Row]),
+    display_move(['o', Col2, Row2]),
     set_next_player(SecondMoveState, NewGameState).
 
 turn(pc(1), GameState, NewGameState) :-
     format('PC Level 1 is making moves...~n', []),
     choose_move(GameState, 1, move('x', Col, Row)),
-    format('Played move: ~w~n', [['x', Col, Row]]),
+    display_move(['x', Col, Row]),
     move(GameState, ['x', Col, Row], FirstMoveState),
     choose_move(FirstMoveState, 1, move('o', Col2, Row2)),
-    format('Played move: ~w~n', [['o', Col2, Row2]]),
+    display_move(['o', Col2, Row2]),
     move(FirstMoveState, ['o', Col2, Row2], SecondMoveState),
     set_next_player(SecondMoveState, NewGameState).
 
 turn(pc(2), GameState, NewGameState) :-
     format('PC Level 2 is thinking...~n', []),
     choose_move(GameState, 2, move('x', Col, Row)),
-    format('Played move: ~w~n', [['x', Col, Row]]),
+    display_move(['x', Col, Row]),
     move(GameState, ['x', Col, Row], FirstMoveState),
     choose_move(FirstMoveState, 2, move('o', Col2, Row2)),
-    format('Played move: ~w~n', [['o', Col2, Row2]]),
+    display_move(['o', Col2, Row2]),
     move(FirstMoveState, ['o', Col2, Row2], SecondMoveState),
     set_next_player(SecondMoveState, NewGameState).
 
@@ -161,8 +183,8 @@ move(game_state(CurrentPlayer, Player1Board, Player2Board, Players),
 
 place_symbol(board(RandomizedColumns, RandomizedRows, Board), Col, Row, Symbol, board(RandomizedColumns, RandomizedRows, NewBoard)) :-
     nth1(RowIndex, RandomizedRows, Row), % Get the actual row index
-    ColCode is Col + 96,                % Convert column to its character code (1 -> 97, 'a')
-    char_code(ColChar, ColCode),         % Convert the column code to the character (e.g., 1 -> 'a')
+    ColCode is Col + 96,                % Convert column to its character code (e.g. 1 becomes 97)
+    char_code(ColChar, ColCode),         % Convert the column code to the character (e.g. 97 corresponds to 'a')
     nth1(ColIndex, RandomizedColumns, ColChar), % Get the actual column index
     nth1(RowIndex, Board, CurrentRow),  % Get the specific row from the board
     replace_in_list(CurrentRow, ColIndex, Symbol, NewRow), % Update the row
@@ -177,7 +199,6 @@ choose_move(game_state(_, Board, _, _), 0, move('x', Col, Row)) :-
     format('Enter your x move (e.g., a1): ', []),
     read(Input),
     process_input_x(Input, ['x', Col, Row]),
-    format('Col: ~w, Row: ~w~n', [Col, Row]),
     valid_move(Board, 'x', Col, Row),
     !.  % Exit loop if input is valid
 
@@ -189,7 +210,6 @@ choose_move(game_state(_, Board, _, _), 0, move('o', Col, Row)) :-
     format('Enter your o move (e.g., a1): ', []),
     read(Input),
     process_input_o(Input, ['o', Col, Row]),
-    format('Col: ~w, Row: ~w~n', [Col, Row]),
     valid_move(Board, 'o', Col, Row),
     !.  % Exit loop if input is valid
 
@@ -338,13 +358,13 @@ is_cell_empty(board(RandomizedColumns, RandomizedRows, Board), Row, Col) :-
     nth1(ColIndex, BoardRow, '-'). % Check if the cell is empty
 
 % Checks if the game is over
-game_over(game_state(_, board(_, _, Board1), board(_, _, Board2), _), Winner) :-
+game_over(game_state(_, board(Col1, Row1, Board1), board(Col2, Row2, Board2), _), Winner) :-
     \+ (member_contains(Board1, '-')),
     \+ (member_contains(Board2, '-')),
-    score(Score1, Board1, _, _),
-    score(Score2, Board2, _, _),
-    format('Player 1 Score: ~w~n', [Score1]),
-    format('Player 2 Score: ~w~n', [Score2]),
+    score(Score1, Board1, (XScore1, HorizontalX1, VerticalX1, DiagonalX1, SquareX1), (OScore1, HorizontalO1, VerticalO1, DiagonalO1, SquareO1)),
+    score(Score2, Board2, (XScore2, HorizontalX2, VerticalX2, DiagonalX2, SquareX2), (OScore2, HorizontalO2, VerticalO2, DiagonalO2, SquareO2)),
+    display_boards_side(board(Col1, Row1, Board1), board(Col2, Row2, Board2)),
+    display_scores_side(Score1, (XScore1, HorizontalX1, VerticalX1, DiagonalX1, SquareX1), (OScore1, HorizontalO1, VerticalO1, DiagonalO1, SquareO1), Score2, (XScore2, HorizontalX2, VerticalX2, DiagonalX2, SquareX2), (OScore2, HorizontalO2, VerticalO2, DiagonalO2, SquareO2)),
     determine_winner(Score1, Score2, Winner).
 
 % Determines the winner based on the scores
@@ -362,10 +382,26 @@ display_winner(player2) :-
 display_winner(draw) :-
     format('It\'s a draw!~n', []).
 
+display_scores_side(Score1, (XScore1, HorizontalX1, VerticalX1, DiagonalX1, SquareX1), (OScore1, HorizontalO1, VerticalO1, DiagonalO1, SquareO1), Score2, (XScore2, HorizontalX2, VerticalX2, DiagonalX2, SquareX2), (OScore2, HorizontalO2, VerticalO2, DiagonalO2, SquareO2)) :-
+    format(' --------------------------------------~n', []),
+    format('  Hor X lines: ~w        Hor X lines: ~w~n', [HorizontalX1, HorizontalX2]),
+    format('  Ver X lines: ~w        Ver X lines: ~w~n', [VerticalX1, VerticalX2]),
+    format('  Dia X lines: ~w        Dia X lines: ~w~n', [DiagonalX1, DiagonalX2]),
+    format('  X Squares: ~w          X Squares: ~w~n', [SquareX1, SquareX2]),
+    format('  X score: ~w            X score: ~w~n', [XScore1, XScore2]),
+    format(' --------------------------------------~n', []),
+    format('  Hor O lines: ~w        Hor O lines: ~w~n', [HorizontalO1, HorizontalO2]),
+    format('  Ver O lines: ~w        Ver O lines: ~w~n', [VerticalO1, VerticalO2]),
+    format('  Dia O lines: ~w        Dia O lines: ~w~n', [DiagonalO1, DiagonalO2]),
+    format('  O Squares: ~w          O Squares: ~w~n', [SquareO1, SquareO2]),
+    format('  O score: ~w            O score: ~w~n', [OScore1, OScore2]),
+    format(' --------------------------------------~n', []),
+    format('  Total: ~w             Total: ~w~n', [Score1, Score2]),
+    format(' --------------------------------------~n', []).
+
 member_contains(Board, Symbol) :-
     member(Row, Board),
     member(Symbol, Row).
-
 
 % Auxiliar predicate to check if Sub is a sublist of List
 sublist(Sub, List) :-
