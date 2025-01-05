@@ -105,7 +105,7 @@ display_rows([Row|Board], [RowIndex|RowIndices]) :-
 
 % Displays 2 boards beside each other (used for game over)
 display_boards_side(board(Headers1, Rows1, Board1), board(Headers2, Rows2, Board2)):-
-    format('~n      Player 1              Player 2~n'), nl,
+    format('~n      Player 1              Player 2~n',[]), nl,
     format('  ', []), write_list(Headers1),
     format('      ', []), write_list(Headers2), nl,
     display_rows_side(Board1, Rows1, Board2, Rows2).
@@ -126,8 +126,7 @@ parse_gamestate(game_state(CurrentPlayer, Player1Board, Player2Board, Players),
 display_move([Symbol, Col, Row]) :-
     ColCode is Col + 96,
     char_code(ColChar, ColCode),
-    atomic_list_concat([ColChar, Row], '', Cell),
-    format('Played ~w on ~w.~n', [Symbol, Cell]).
+    format('Played ~w on ~w.~n', [Symbol, [ColChar,Row]]).
 
 % Handles the turn of a player
 turn(human, GameState, NewGameState) :-
@@ -264,6 +263,12 @@ calculate_max_opponent_value(SimulatedState, OpponentMoves, MaxOpponentValue) :-
         value(OpponentGameState, _, OpponentValue)
     ), OpponentValues),
     max_list(OpponentValues, MaxOpponentValue).
+
+max_list([X], X).
+
+max_list([H|T], Max) :-
+    max_list(T, TailMax),
+    Max is max(H, TailMax).
 
 compute_diff(CurrentValue, _, [], CurrentValue). % Fallback when no opponent moves
 compute_diff(CurrentValue, MaxOpponentValue, [_|_], Diff) :- 
@@ -441,16 +446,7 @@ count_vertical_lines(Board, Symbol, Count) :-
     transpose(Board, Transposed),
     count_lines(Transposed, Symbol, Count).
 
-% Transpose the board in order to simplify counting vertical lines
-transpose([], []).
-transpose([[]|_], []).
-transpose(Matrix, [Row|Rest]) :-
-    maplist(head, Matrix, Row),
-    maplist(tail, Matrix, TailMatrix),
-    transpose(TailMatrix, Rest).
 
-head([H|_], H).
-tail([_|T], T).
 
 % Count diagonal lines of 4 for a given symbol
 count_diagonal_lines(Board, Symbol, Count) :-
