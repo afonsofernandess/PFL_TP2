@@ -144,33 +144,33 @@ Game implementation:
 ## Annex
 ### Inicial State
 
-![Inicial State](../PFL_TP2/images/inicial_state.png "Inicial State")
+![Inicial State](images/inicial_state.png "Inicial State")
 
 ### Itermidiate State
-![Itermidiate State](../PFL_TP2/images/intermidiate_state.png)
+![Itermidiate State](images/intermidiate_state.png)
 
 ### Final State
-![Final State](../PFL_TP2/images/final_state.png)
+![Final State](images/final_state.png)
 
 
 
 
 ### Invalid Move
-![INvalid Move](../PFL_TP2/images/invalid_move.png)
+![INvalid Move](images/invalid_move.png)
 
 ### Menu
 
-![Menu](../PFL_TP2/images/menu.png)
+![Menu](images/menu.png)
 
 ### PC Level
 
-![Pc Level](../PFL_TP2/images/pc_level.png)
+![Pc Level](images/pc_level.png)
 
 ### PC Turn
 
-![Pc Turn](../PFL_TP2/images/pc_turn.png)
+![Pc Turn](images/pc_turn.png)
 
 ### Score
 
-![Score](../PFL_TP2/images/scores.png)
+![Score](images/scores.png)
 
